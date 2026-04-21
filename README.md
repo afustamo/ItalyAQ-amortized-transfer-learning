@@ -4,6 +4,3 @@ This repository contains the code for the article "A Non-stationary, Amortized, 
 The paper can currently be found on arxiv.
 
 Figure. 
-
-
-s

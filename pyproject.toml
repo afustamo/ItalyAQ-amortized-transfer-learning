@@ -16,7 +16,7 @@ dependencies = [
     "scikit-image>=0.24.0",
     "scikit-learn>=1.5.2",
     # torch
-    "torch>=2.5.1",
+    "torch>=2.5.1,<2.11",
     "torchsummary>=1.5.1",
     "torchvision>=0.19.1",
     "torchtune>=0.5.0", # for RoPE and compatible MHA

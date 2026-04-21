@@ -2,7 +2,7 @@
 data/
 
 # resulting plots as well
-# results/
+results/model_wghts/
 
 # additional files
 .DS_Store
