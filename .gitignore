@@ -1,0 +1,17 @@
+# data should be ignored (large files)
+# data/
+
+# resulting plots as well
+# results/
+
+# additional files
+.DS_Store
+.Rhistory
+.RData
+.here
+**/__pycache__/
+tests/_temp/
+.coverage
+.coverage.*
+profile.out
+.Rproj.user
