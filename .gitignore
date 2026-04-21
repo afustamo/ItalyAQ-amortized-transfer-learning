@@ -1,5 +1,5 @@
 # data should be ignored (large files)
-# data/
+data/
 
 # resulting plots as well
 # results/

@@ -1,7 +1,7 @@
 [project]
 name = "latticevision"
-version = "0.1.0"
-description = "Image to image networks for modeling big non-stationary spatial data"
+version = "0.2.0"
+description = "Non-stationary, Amortized, Transfer Learning with LatticeVision for Italian Air Quality Data"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -30,6 +30,7 @@ dependencies = [
     "zarr>=2.18.3",
     "gcsfs>=2025.9.0",
     "cartopy>=0.25.0",
+    "datasets>=2.20.0",
 ]
 
 # default groups to install
@@ -62,10 +63,10 @@ lint = [
 
 # project links -- used in doc gen
 [project.urls]
-Homepage = "https://github.com/antonyxsik/LatticeVision"
-Documentation = "https://github.com/antonyxsik/LatticeVision"
-Repository = "https://github.com/antonyxsik/LatticeVision"
-Issues = "https://github.com/antonyxsik/LatticeVision/issues"
+Homepage = "https://github.com/afustamo/ItalyAQ-amortized-transfer-learning"
+Documentation = "https://github.com/afustamo/ItalyAQ-amortized-transfer-learning"
+Repository = "https://github.com/afustamo/ItalyAQ-amortized-transfer-learning"
+Issues = "https://github.com/afustamo/ItalyAQ-amortized-transfer-learning"
 
 # how to build the package
 [build-system]
@@ -74,7 +75,7 @@ build-backend = "hatchling.build"
 
 # ruff config
 [tool.ruff]
-exclude = ["__pycache__", "notebooks/old", "latticevision/stun/old"]
+exclude = ["__pycache__"]
 
 [tool.ruff.format]
 indent-style = "tab"
@@ -111,6 +112,7 @@ exports = [
         "results/**",
         ".pytest_cache/**",
         ".ruff_cache/**",
+        "data/**",
 	]
     [tool.lmcat.glob_process]
         "[mM]akefile" = "makefile_recipes"

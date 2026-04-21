@@ -2,52 +2,6 @@ import random
 import torch
 
 
-# AUGMENTATION FOR CNN: -----------------
-def random_negative(fields):
-	"""
-	Randomly negates CNN fields.
-	"""
-	fields = -fields
-	return fields
-
-
-def random_translate(fields):
-	"""
-	Randomly translates CNN fields by a random shift in the x and y directions.
-	"""
-	# get dims for bounding the shift
-	_, _, rows, cols = fields.shape
-
-	# randomly shift (at max shift whole image)
-	xshift = random.randint(-cols, cols)
-	yshift = random.randint(-rows, rows)
-
-	# roll field
-	fields = torch.roll(fields, shifts=xshift, dims=-1)
-	fields = torch.roll(fields, shifts=yshift, dims=-2)
-
-	return fields
-
-
-def random_augment(fields):
-	"""
-	Randomly augments CNN fields by applying one or more augmentations.
-	Helper function for training, eval, and plotting.
-	"""
-	# randomly choose one or two augmentations
-	augs = [random_negative, random_translate]
-	num_augs = random.randint(1, len(augs))
-	chosen_augs = random.sample(augs, num_augs)
-
-	for aug in chosen_augs:
-		fields = aug(fields)
-
-	return fields
-
-
-# AUGMENTATION FOR IMG 2 IMG ------------------
-
-
 def random_negative_clim(fields, params):
 	"""
 	Randomly negates fields, but has
