@@ -35,7 +35,7 @@ device = set_device(
 
 
 modeltype_list = ["TransUNet"]
-num_replicates_list = [1, 30]
+num_replicates_list = [30]
 pos_embeddings_all = [RotaryPosEmbed]
 
 
@@ -226,8 +226,6 @@ for num_replicates in num_replicates_list:
 				index=False,
 			)
 
-			# can add some italy_aq eval here later
-			# --------------------------------------
 
 			del model, training_results
 

@@ -28,7 +28,7 @@ DATA_DIR = "data"
 DATA_FILE = "I2I_sample_data.h5"
 DATA_PATH = os.path.join(DATA_DIR, DATA_FILE)
 GDRIVE_ID = (
-	"12MMs-U-2hbWsQHKAENEBFgWAzNCFmNlx"  # old was "1uL5601e-jkL1X9YGm0Gmw0W7hI_3HNxP"
+	"12MMs-U-2hbWsQHKAENEBFgWAzNCFmNlx"  # old was "1uL5601e-jkL1X9YGm0Gmw0W7hI_3HNxP" 
 )
 GDRIVE_URL = f"https://drive.google.com/uc?id={GDRIVE_ID}"
 

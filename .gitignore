@@ -3,6 +3,7 @@ data/
 
 # resulting plots as well
 results/model_wghts/
+results/metrics/
 
 # additional files
 .DS_Store
@@ -15,3 +16,4 @@ tests/_temp/
 .coverage.*
 profile.out
 .Rproj.user
+.pytest_cache/
