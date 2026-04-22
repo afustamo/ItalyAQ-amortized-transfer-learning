@@ -1,10 +1,6 @@
 # data should be ignored (large files)
 data/
 
-# resulting plots as well
-results/model_wghts/
-results/metrics/
-
 # additional files
 .DS_Store
 .Rhistory
