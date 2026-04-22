@@ -1,34 +1,23 @@
+# HPC script
+
+# try2 is the baseline
+# try3  just background stations and concentrations less than 80, Ndata > 250
+# try4 is just CV with log scale
+# try5 - TO BE DONE - try other kappa2_weights, in particular, use the shapefile of Italy + 20km of buffer!
+# or a kind of a smooth, like 1 at coast and gradually toward 0 going far from it
+# and we keep also the log scale for the response variable
+# try6 - same weights as try5 but without log scale
+
 HPC <- as.logical(Sys.getenv("AQ_amortised_HPC"))
 if (is.na(HPC)) {
   HPC <- F
 }
 
-if (HPC) {
-  surfaces <- F
-  CV_scheme <- T
-  total_time <- 365
-  setwd("AQ_amortised")
-} else{
-  surfaces <- T
-  CV_scheme <- F
-  total_time <- 60
-}
-
-if (CV_scheme) {
-  CV_type <- Sys.getenv("AQ_amortised_CV_type")
-  if (CV_type == "") {
-    CV_type <- "10-fold"
-  }
-}
-# 1. "10-fold"
-#
-
-
 # Packages and source codes ####
 library(doParallel)
 library(foreach)
 if (HPC) {
-  registerDoParallel(cores = detectCores())
+  registerDoParallel(cores = detectCores() - 1)
 } else{
   registerDoParallel(cores = detectCores() / 2)
 }
@@ -39,42 +28,167 @@ library(sf)
 library(sp)
 library(gstat)
 library(tictoc)
+library(here)
+
+# %% settings
+
+if (HPC) {
+  surfaces <- T 
+  only_params <- F
+  CV_scheme <- T
+  total_time <- 365
+  try(setwd("AQ_amortised"))
+} else{
+  surfaces <- T
+  CV_scheme <- F
+  total_time <- 60
+}
+
+cams_df <- readRDS(here("data", "cams_df_2023.rds"))
+elev_map <-cams_df$DEM[cams_df$time == 19358]
+elev_map_mask <- elev_map 
+elev_map_mask[elev_map_mask != 0] <- 1
+kappa2_weights <- elev_map_mask
+
+
+# # try5 - try6 without log
+# load("data/Italy_shp.Rdata")
+
+# plot(Italy)
+# grid_cams <- unique(cams_df[,c("Longitude","Latitude")])
+# coordinates(grid_cams) <- c("Longitude","Latitude")
+# Italy <- st_as_sf(Italy)
+# grid_cams <- st_as_sf(grid_cams)
+# st_crs(Italy)
+# st_crs(grid_cams) <- st_crs(4326)
+# Italy <- st_transform(Italy,st_crs(4326))
+# grid_dist <- st_distance(grid_cams, Italy)
+# # image(matrix(grid_dist,128,128))
+# dist_sp <- SpatialPointsDataFrame(as_Spatial(grid_cams),data.frame(dist_coast=grid_dist))
+# dist_sp@data$kappa2_old <- kappa2_weights
+# summary(dist_sp@data$dist_coast)
+# dist_sp@data$kappa2_weights <- NA
+# dist_sp@data$kappa2_weights[dist_sp@data$kappa2_old==0] <- 1
+# dist_sp@data$kappa2_weights <- exp(-as.numeric(dist_sp@data$dist_coast/30000))
+# dist_sp@data$kappa2_weights[as.numeric(dist_sp@data$dist_coast)>30000] <- 0
+# # gridded(dist_sp)<-T
+# # spplot(dist_sp,"kappa2_weights")
+# kappa2_weights<- dist_sp@data$kappa2_weights
+# # ggplot(cams_df[cams_df$time == 19358,],aes(x=Longitude,y=Latitude))+
+# #   geom_tile(fill=as.factor(kappa2_weights))
+
+
+rm(cams_df,grid_cams,dist_sp)
+
+if (CV_scheme) {
+  CV_type <- Sys.getenv("AQ_amortised_CV_type")
+  if (CV_type == "") {
+    CV_type <- "10-fold"
+  }
+}
+
+# 1. "10-fold"
+# look inside "paste0("data/output/", CV_type" , find the biggest try1 try2 etc. and make a new folder for the new try
+
+if (CV_scheme) {
+  try_ex <- list.files(paste0("data/output/", CV_type),pattern = "try")
+  n_try_ex <- as.numeric(substr(try_ex,4,nchar(try_ex)))
+  n_try_ex <- max(n_try_ex)
+  n_try_new <- n_try_ex + 1
+  n_try_new_cv <- n_try_new
+}
+
+if (surfaces) {
+  try_ex1 <- list.files(paste0("data/output/map"),pattern = "try")
+  try_ex2 <- list.files(paste0("data/output/coef"),pattern = "try")
+  n_try_ex1 <- max(as.numeric(substr(try_ex1,4,nchar(try_ex1))))
+  n_try_ex2 <- max(as.numeric(substr(try_ex2,4,nchar(try_ex2))))
+  n_try_ex <- max(n_try_ex1, n_try_ex2)
+  n_try_new <- n_try_ex + 1
+  n_try_new_surf <- n_try_new
+}
+
+if (surfaces & CV_scheme){
+  n_try_new <- max(n_try_new_cv,n_try_new_surf)
+}
+
+if (CV_scheme) {
+dir.create(paste0("data/output/", CV_type, "/try", n_try_new))
+CV_folder <- file.path("data/output", CV_type, paste0("try", n_try_new))
+}
+if (surfaces) {
+dir.create(paste0("data/output/map/try", n_try_new))
+dir.create(paste0("data/output/coef/try", n_try_new))
+map_folder <- file.path(paste0("data/output/map/try", n_try_new))
+coef_folder <- file.path(paste0("data/output/coef/try", n_try_new))
+}
+
+if (CV_scheme){
+print("CV_folder")
+print(CV_folder)
+  }
+if (surfaces){
+print("map_folder")
+print(map_folder)
+print("coef_folder")
+print(coef_folder)
+  }
 
 # for HPC
-source("R_scripts/hacked_LatticeKrig.R")
-source("R_scripts/LK_functions.R")
+source(here("R_scripts", "helpful_functions.R"))
 
 # Loading datasets ####
-stations_df <- readRDS("data/eea_df_2023.rds")
-pred_df <- readRDS("data/pred_df_2023.rds")
-params_all <- h5read("data/STUN_param_df_2023.h5", "arx1_surround_30rep_output")
+stations_df <- readRDS(here("data", "eea_df_2023.rds"))
+pred_df <- readRDS(here("data", "pred_df_2023.rds"))
+params_all_surr30 <- h5read(here("results", "STUN_param_df_2023padded"), "arx1_surround_30rep_output")
+
+
+# h5ls(here("data", "STUN_param_df_2023padded"))
 H5close()
 
+load(here("data", "Station_registry_information.rda"))
+stations_df <- merge(stations_df,Station_registry_information[,c("AirQualityStation",
+"AirQualityStationType")])
+
+#try3 
+# change also the number of stations necessary to 250 instead of 450
+# hist(stations_df$EEA_NO2,breaks = 150) #try3
+# hist(log(stations_df$EEA_NO2),breaks = 150) #try3
+# quantile(stations_df$EEA_NO2,.999,na.rm=T)
+stations_df$EEA_NO2[stations_df$EEA_NO2 >= 80] <- NA
+stations_df <- subset(stations_df,AirQualityStationType=="background")
+
+# #try4 and try5
+# stations_df$EEA_NO2 <- log(stations_df$EEA_NO2)
+
+# days involved
 station_time <- unique(stations_df$time)
 station_time <- station_time[order(station_time)]
 aa<-c()
 time_sel <- c()
+all_N_data <- c()
 for (i in 1:365) {
   stations_df_day <- stations_df[stations_df$time == station_time[i], ]
   stations_df_day <- stations_df_day[!is.na(stations_df_day$EEA_NO2), ]
   N_data <- nrow(stations_df_day)
-  print(N_data)
-  if(N_data>=450){aa <- c(aa,TRUE)
+  all_N_data <- c(all_N_data,N_data)
+  if(N_data>=250){aa <- c(aa,TRUE)
   time_sel <- c(time_sel,station_time[i])}
 }
+head(time_sel - 19357)
+which(station_time==as.Date("2023-01-10"))
 
-which(station_time==as.Date("2023-01-15"))
+# %%
 
 # Begin cycle ####
 foreach(
   time_cycle = 1:total_time,
-  .packages = c("rhdf5", "LatticeKrig", "sf", "FRK", "sp", "gstat"),
-  .export = "nonstat_Q",
+  .packages = c("rhdf5", "LatticeKrig", "sf", "FRK", "sp", "gstat", "here"),
+  .export = c("nonstat_Q","kappa2_weights"),
   .combine = rbind
 ) %dopar% {
-  # functions ####
-  source("R_scripts/hacked_LatticeKrig.R")
-  source("R_scripts/LK_functions.R")
+  ## functions ####
+  source(here("R_scripts", "helpful_functions.R"))
   
   predict.multivariateSurfaceGrid <- function(object, x) {
     dimZ <- dim(object$z)
@@ -115,32 +229,32 @@ foreach(
     LKinfo, 
     kappa2_weights,
     verbose = FALSE
-  ){
-    
-    kappa2_weights <- kappa2_weights
-    # assign("kappa2_weights", as.numeric(kappa2_weights), envir = .GlobalEnv)
-    
-    LKinfo_additional <- LKinfo
-    LKinfo_additional$a.wght <- NA
-    LKinfo_additional$a.wghtObject <- NULL
-    LKinfo_additional$a.wght <- list()
-    LKinfo_additional$a.wght[[1]] <- 4.01
-    attr(LKinfo_additional$a.wght, "isotropic") <- TRUE
-    
-    Lmodel_additional <- LatticeKrig_hacked(
-      s,
-      y,
-      Z,
-      LKinfo = LKinfo_additional, 
-      findAwght = T
-    )
-    
-    LKinfo_new <- LKinfo
-    LKinfo_new$a.wght[[1]][,5] <- LKinfo_new$a.wght[[1]][,5] + 
-      (kappa2_weights * (Lmodel_additional$LKinfo$a.wght[[1]]-4))
-    
-    return(LKinfo_new)
-  }
+){
+  
+  kappa2_weights <- kappa2_weights
+  # assign("kappa2_weights", as.numeric(kappa2_weights), envir = .GlobalEnv)
+  
+  LKinfo_additional <- LKinfo
+  LKinfo_additional$a.wght <- NA
+  LKinfo_additional$a.wghtObject <- NULL
+  LKinfo_additional$a.wght <- list()
+  LKinfo_additional$a.wght[[1]] <- 4.01
+  attr(LKinfo_additional$a.wght, "isotropic") <- TRUE
+  
+  Lmodel_additional <- LatticeKrig_hacked(
+    s,
+    y,
+    Z,
+    LKinfo = LKinfo_additional, 
+    findAwght = T
+  )
+  
+  LKinfo_new <- LKinfo
+  LKinfo_new$a.wght[[1]][,5] <- LKinfo_new$a.wght[[1]][,5] + 
+    (kappa2_weights * (Lmodel_additional$LKinfo$a.wght[[1]]-4))
+  
+  return(LKinfo_new)
+}
   # now let's do the additional kappa2 modification
   LatticeKrig_hacked <- function(x,
                                  y,
@@ -787,12 +901,12 @@ foreach(
   
   
   
-  # import dataset ####
-  stations_df[, "ssr"] <- stations_df[, "ssr"] / 10^6
+  ## import dataset ####
   station_time <- unique(stations_df$time)
   station_time <- station_time[order(station_time)]
   stations_df_day <- stations_df[stations_df$time == station_time[time_cycle], ]
   stations_df_day <- stations_df_day[!is.na(stations_df_day$EEA_NO2), ]
+  stations_df_day[, "ssr"] <- stations_df_day[, "ssr"] / 10^6
   # skip days with less than 450 stations
   covars <- c("rh",
               "ssr",
@@ -802,13 +916,17 @@ foreach(
               "EM_NO2",
               "DEM",
               "lag_cams_no2")
-  # set.seed(1)
-  set.seed(time_cycle)
+  if(ntry=="try7"){
+    covars <- c("EM_NO2","DEM")
+  }
+  set.seed(1)
   N_data <- nrow(stations_df_day)
-  # start computation ####
-  if (N_data >= 450) {
+  ## start computation ####
+  if (N_data >= 250) { #try3: from 450 to 250
+    # & !paste0("data/output/10-fold/y_test_df_", time_cycle, ".rds") %in% list.files("data/output/10-fold")
+    # print(paste0("Time cycle ", time_cycle, " already computed, skipping..."))
     if (surfaces) {
-      ## 1a. Training data ####
+      ### 1a. Training data ####
       train_df <- stations_df_day
       s_train <- train_df[, c("Longitude", "Latitude")]
       y_train <- train_df$EEA_NO2
@@ -827,7 +945,6 @@ foreach(
       gridded(pred_sp_day) <- TRUE
       
       # 2. Models ####
-      
       ## 2a. LM - Linear Model ####
       
       # training the model
@@ -839,10 +956,51 @@ foreach(
       )
       time <- toc()$callback_msg
       
+      # model interpretation
+      # coefficients
+      coef_ls <- as.data.frame(summary(lm)$coefficients)
+      names(coef_ls) <- paste0("lm_", names(coef_ls))
+
       # surfaces
       pred_sp_day@data$lm <- predict(lm, newdata = pred_df_day)
-      # coefficienti ?
-      # altri parametri ? 
+
+      ## 2b. KED ####
+      train_sp <- train_df
+      coordinates(train_sp) <- c("Longitude","Latitude")
+      # fit a variogram
+      variogram <- variogram(EEA_NO2 ~ Longitude + Latitude + rh + ssr + t2m +
+          windspeed + sl_blh + EM_NO2 + DEM + lag_cams_no2, data = train_sp)
+      # plot(variogram)
+      # # fit a variogram model
+      variogram_model <- tryCatch(
+        {
+          fit.variogram(variogram, model = vgm("Exp"))
+        },
+        error = function(e) {
+          print(paste("Errore:", e$message))
+          return(NULL)
+        }
+      )
+
+      if (is.null(variogram_model) | variogram_model$range[2]<0) {
+      pred_sp_day@data$ked <- NA
+      pred_sp_day@data$ked_sd <- NA
+      } else {
+      krige0 <- krige(formula = EEA_NO2 ~ Longitude + Latitude + rh + ssr + t2m +
+            windspeed + sl_blh + EM_NO2 + DEM + lag_cams_no2,locations = train_sp,
+                newdata=pred_sp_day,model=variogram_model)
+              pred_sp_day@data$ked <- krige0$var1.pred
+              # pred_sp_day@data$ked_sp <- pred_sp_day@data$ked - pred_sp_day@data$lm # qualcosa non va.. manca GLS?
+              # pred_sp_day@data$ked_sd <- sqrt(krige0$var1.var)
+              # g <- gstat(
+              #             formula = EEA_NO2 ~ Longitude + Latitude + rh + ssr + t2m +
+              #               windspeed + sl_blh + EM_NO2 + DEM + lag_cams_no2,
+              #             data = train_sp,
+              #             model = variogram_model
+              #           )
+        #       beta_gls <- predict(g, newdata = train_sp, BLUE = TRUE) # questo è il trend?
+        # attr(beta_gls, "beta")
+      }
       
       ## 2d. LK_stat - Lattice stationary ####
       ## 1 level of resolution, find Awght TRUE
@@ -875,17 +1033,45 @@ foreach(
       )
       time <- c(time, toc()$callback_msg)
       
+      # coefficients
+      # large scale
+      coef_ls <- cbind(coef_ls, as.data.frame(LK_stat$d.coef))
+      names(coef_ls)[ncol(coef_ls)] <- "LK_stat_Estimate"
+
+      # spatial correlation
+      sp_param <- data.frame(kappa2_stat = LK_stat$LKinfo$a.wght[[1]] - 4) # this is the kappa2 parameter that controls the spatial correlation in the model. The larger it is, the less spatial correlation there is.
+    
+      # nugget
+      err_param <- data.frame(tau_stat = LK_stat$tau.MLE.FULL) # this is the nugget parameter that controls the amount of measurement error in the model. The larger it is, the more measurement error there is.
+      err_param$sigma2_stat <- LK_stat$sigma2.MLE.FULL # this is the sigma2 parameter that controls the amount of spatial variability in the model. The larger it is, the more spatial variability there is.
+      
+      # add KED - try3
+      if (!is.null(variogram_model)) {
+      sp_param <- cbind(data.frame(range_ked=variogram_model$range[2],
+                  sill_ked = variogram_model$psill[2]),sp_param)
+      err_param <- cbind(data.frame(nugget_ked=variogram_model$psill[1]),err_param)
+      } else {
+        sp_param <- cbind(data.frame(range_ked=NA, nugget_ked=NA, sill_ked = NA),sp_param)
+        err_param <- cbind(data.frame(nugget_ked=NA),err_param)
+      }
+
       # surfaces
+      if (!only_params){
       pred_sp_day@data$LK_stat <- predict(LK_stat, s_pred, Z = Z_pred)[, 1]
       pred_sp_day@data$LK_stat_ls <- predict(LK_stat,
                                              xnew = s_pred,
                                              Z = Z_pred,
                                              just.fixed = TRUE)[, 1]
       pred_sp_day@data$LK_stat_sp <- pred_sp_day@data$LK_stat - pred_sp_day@data$LK_stat_ls
+      }
+
+      # spplot(pred_sp_day, c("lm", "LK_stat_ls", "LK_stat_sp"))
+      # spplot(pred_sp_day, c("LK_stat_sp"))
       
       ## 2e. LK_stun - Lattice Kriging + STUN parameters ####
       
-      # import STUN parameters
+
+      params_all <- params_all_surr30
       params <- params_all[, 128:1, , time_cycle]
       kappa2 <- exp(params[, , 1])
       awght <- kappa2 + 4
@@ -941,7 +1127,8 @@ foreach(
       ## 2f. LK_stun_adj - Adjusted Lattice Krig + STUN ####
       
       #training the model
-      kappa2_weights <- 1
+      # kappa2_weights <- 1
+      
       tic("time_LK_stun_adj")
       LKinfo_stun_adj <- est_additional_kappa2(s_train, y_train, Z_train, LKinfo_stun, kappa2_weights = kappa2_weights)
       LK_stun_adj <- LatticeKrig(
@@ -952,26 +1139,55 @@ foreach(
       )
       time <- c(time, toc()$callback_msg)
       
+      # coefficients
+      # large scale
+      coef_ls <- cbind(coef_ls, as.data.frame(LK_stun_adj$d.coef))
+      names(coef_ls)[ncol(coef_ls)] <- paste("LK_stun_adj_Estimate")
+      
+      # spatial correlation
+      kappa2_adj <- LK_stun_adj$LKinfo$a.wght[[1]][,5] + (2 * LK_stun_adj$LKinfo$a.wght[[1]][,2]) + (2 * LK_stun_adj$LKinfo$a.wght[[1]][,4])
+      kappa2_stun <- LKinfo_stun$a.wght[[1]][,5] + (2 * LKinfo_stun$a.wght[[1]][,2]) + (2 * LKinfo_stun$a.wght[[1]][,4])
+      kappa2_eea <- kappa2_adj - kappa2_stun
+      sp_param <- cbind(sp_param,data.frame(kappa2_adj=kappa2_adj,kappa2_stun=kappa2_stun,kappa2_eea=kappa2_eea))  # this is the kappa2 parameter that controls the spatial correlation in the model. The larger it is, the less spatial correlation
+      sp_param <- cbind(sp_param, data.frame(kappa2_weights = kappa2_weights)) # this is the kappa2 parameter that controls the spatial correlation in the model. The larger it is, the less spatial correlation
+       
+      # nugget effect
+      err_param <- cbind(err_param, data.frame(tau_stun_adj = LK_stun_adj$tau.MLE.FULL)) # this is the nugget parameter that controls the amount of measurement error in the model. The larger it is, the more measurement error there is.
+      err_param <- cbind(err_param, data.frame(sigma2_stun_adj = LK_stun_adj$sigma2.MLE.FULL)) # this is the sigma2 parameter that controls the amount of spatial variability in the model. The larger it is, the more spatial variability there is.
+      
       # surfaces
+      if (!only_params){
       pred_sp_day@data$LK_stun_adj <- predict(LK_stun_adj, s_pred, Z = Z_pred)[, 1]
       pred_sp_day@data$LK_stun_adj_ls <- predict(LK_stun_adj,
                                                  xnew = s_pred,
                                                  Z = Z_pred,
                                                  just.fixed = TRUE)[, 1]
       pred_sp_day@data$LK_stun_adj_sp <- pred_sp_day@data$LK_stun_adj - pred_sp_day@data$LK_stun_adj_ls
-      
-      
+      }
       # 3. exporting ####
+      if (!only_params){
       save(pred_sp_day,
-           file = paste0("data/output/map/prediction_map_", time_cycle, ".rda")) #10 MB
+           file = file.path(map_folder,
+            paste0("prediction_map_", time_cycle, ".rda"))) #10 MB
+      }
+      coef_ls$time <- station_time[time_cycle]
+      sp_param$time <- station_time[time_cycle]
+      err_param$time <- station_time[time_cycle]
+      save(coef_ls,sp_param,err_param,file = file.path(coef_folder,
+        paste0("coef_", time_cycle, ".rda")))
+      # ADD TIME !!
+      
       # spplot(pred_sp_day,"LK_stun_adj_sp")
       # spplot(pred_sp_day,c("ked_sp","LK_def_sp","LK_stat_sp","LK_stun_sp","LK_stun_adj_sp"))
-      pdf(paste0("data/output/plot/results_", time_cycle, ".pdf"))
-      print(spplot(pred_sp_day, c("LK_stat_sp", "LK_stun_adj_sp")))
-      print(spplot(pred_sp_day, c("LK_stat_ls", "LK_stun_adj_ls")))
-      print(spplot(pred_sp_day, c("lm", "LK_stat", "LK_stun_adj")))
-      dev.off()
-      
+      # pdf(paste0("data/output/plot/results_", time_cycle, ".pdf"))
+      # print(spplot(pred_sp_day, c("LK_stat_sp", "LK_stun_adj_sp")))
+      # print(spplot(pred_sp_day, c("LK_stat_ls", "LK_stun_adj_ls")))
+      # print(spplot(pred_sp_day, c("lm", "LK_stat", "LK_stun_adj")))
+      # dev.off()
+      # try(dev.off())
+      # coef_ls$time <- station_time[time_cycle]
+      # sp_param$time <- station_time[time_cycle]
+      # save(coef_ls, sp_param, file = paste0("data/output/coef/coef_sp_param_", time_cycle, ".rda"))
     }
     
     if (CV_scheme) {
@@ -979,8 +1195,8 @@ foreach(
       
       # big-regions
       if (CV_type == "big-regions") {
-        # step_kfold <- c(1, N_data * seq(0.1, 1, 0.1))
-        # cv_idx <- sample(N_data, N_data, replace = F)
+        step_kfold <- c(1, N_data * seq(0.1, 1, 0.1))
+        cv_idx <- sample(N_data, N_data, replace = F)
         for (nk in 1:10) {
           start_fold <- ceiling(step_kfold[nk])
           end_fold <- floor(step_kfold[nk + 1])
@@ -998,8 +1214,6 @@ foreach(
           kfold[[nk]] <- cv_idx[start_fold:end_fold]
         }
       }
-      
-      # start CV
       for (nk in 1:length(kfold)) {
         test_ind <- kfold[[nk]]
         ## 1a. Training data ####
@@ -1062,6 +1276,48 @@ foreach(
         
         # training the model
         # tic("time_ked")
+        train_sp <- train_df
+        coordinates(train_sp) <- c("Longitude","Latitude")
+        test_sp <- test_df
+        coordinates(test_sp) <- c("Longitude","Latitude")
+        tic("time_KED")
+        variogram <- variogram(EEA_NO2 ~ Longitude + Latitude + rh + ssr + t2m +
+          windspeed + sl_blh + EM_NO2 + DEM + lag_cams_no2, data = train_sp)
+      # plot(variogram)
+      # # fit a variogram model
+      variogram_model <- tryCatch(
+        {
+          fit.variogram(variogram, model = vgm("Exp"))
+        },
+        error = function(e) {
+          print(paste("Errore:", e$message))
+          return(NULL)
+        }
+      )
+
+
+      if (is.null(variogram_model) | variogram_model$range[2]<0) {
+      y_test_ked <- rep(NA,length(test_sp))
+      se_ked <- rep(NA,length(test_sp))
+      } else {
+      krige0 <- krige(formula = EEA_NO2 ~ Longitude + Latitude + rh + ssr + t2m +
+            windspeed + sl_blh + EM_NO2 + DEM + lag_cams_no2,locations = train_sp,
+                newdata=test_sp,model=variogram_model)
+        y_test_ked <- krige0$var1.pred
+        se_ked <- sqrt(krige0$var1.var)
+      }
+      
+        time <- c(time, toc()$callback_msg)
+        y_test_ked <- cbind(
+          y_test_ked - 1.96 * se_ked,
+          y_test_ked,
+          y_test_ked + 1.96 * se_ked
+        )
+        colnames(y_test_ked) <- names_test_df
+        colnames(y_test_ked)<-paste0("ked_",colnames(y_test_ked))
+        y_test_df <- cbind(y_test_df,y_test_ked)
+        
+        
         # ked <- spatialProcess(s_train, y_train, Z = Z_train)
         
         # print("error")
@@ -1105,6 +1361,7 @@ foreach(
         
         # test predictions
         y_test_LK_def <- predict(LK_def, s_test, Z = Z_test)
+        # y_test_LK_def_ls <- predict(LK_def, s_test, Z = Z_test, just.fixed = TRUE)
         se_LK_def <- predictSE(LK_def, s_test, Z = Z_test)
         y_test_LK_def <- cbind(
           y_test_LK_def - 1.96 * sqrt(se_LK_def^2 + LK_def$tau.MLE^2),
@@ -1139,7 +1396,7 @@ foreach(
         tic("time_LK_stat")
         LK_stat <- LatticeKrig(
           s_train,
-          y_train,
+          y_train, 
           Z = Z_train,
           LKinfo = LKinfo_stat,
           findAwght = TRUE
@@ -1168,9 +1425,21 @@ foreach(
         y_test_df <- cbind(y_test_df, y_test_LK_stat)
         
         ## 2e. LK_stun - Lattice Kriging + STUN parameters ####
-        
+        names_param <- c("surr30", "surr1", "rscale30", "rscale1")
         # import STUN parameters
-        params <- params_all[, 128:1, , time_cycle]
+        for (i in 1) # loop through the 4 different STUN parameter sets, 1: surr30, 2: surr1, 3: rscale30, 4: rscale1
+        {
+          if (i == 1){
+            params <- params_all_surr30[, 128:1, , time_cycle] # which params we want?
+          } else if (i == 2){
+            params <- params_all_surr1[, 128:1, , time_cycle] # which params we want?
+          } else if (i == 3){
+            params <- params_all_rscale30[, 128:1, , time_cycle] # which params we want?
+          } else {
+            params <- params_all_rscale1[, 128:1, , time_cycle] # which params we want?
+          }
+        
+        #params <- params_all[, 128:1, , time_cycle]
         kappa2 <- exp(params[, , 1])
         awght <- kappa2 + 4
         theta <- params[, , 2] + pi / 2
@@ -1240,7 +1509,7 @@ foreach(
         ## 2f. LK_stun_adj - Adjusted Lattice Krig + STUN ####
         
         #training the model
-        kappa2_weights <- 1
+        # kappa2_weights <- 1
         tic("time_LK_stun_adj")
         LKinfo_stun_adj <- est_additional_kappa2(s_train,
                                                  y_train,
@@ -1274,9 +1543,10 @@ foreach(
           y_test_LK_stun_adj + 1.96 * sqrt(se_LK_stun_adj^2 + LK_stun_adj$tau.MLE^2)
         )
         colnames(y_test_LK_stun_adj) <- names_test_df
-        colnames(y_test_LK_stun_adj) <- paste0("LK_stun_adj_", colnames(y_test_LK_stun_adj))
+        colnames(y_test_LK_stun_adj) <- paste0("LK_stun_adj_",colnames(y_test_LK_stun_adj))
+        # colnames(y_test_LK_stun_adj) <- paste0("LK_stun_adj_", colnames(y_test_LK_stun_adj))
         y_test_df <- cbind(y_test_df, y_test_LK_stun_adj)
-        
+        }
         # ## 2g. FRK - Fixed Rank Kriging ####
         #
         # # training model
@@ -1355,10 +1625,12 @@ foreach(
         # dev.off()
         
       }
+      # CV_folder
       saveRDS(all_y_test_df,
-              file = file.path("data/output",CV_type,paste0("y_test_df_", time_cycle, ".rds"))) # 7.8 KB
+              file = file.path(CV_folder,paste0("y_test_df_", time_cycle, ".rds"))) # 7.8 KB
     }
   }
 }
-# saveRDS(all_y_test_df,
-#         file = paste0("data/output/all_y_test_df.rds"))
+
+
+  

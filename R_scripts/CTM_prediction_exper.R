@@ -1,12 +1,23 @@
+##########             IMPORTANT              ###########
+#-------------------------------------------------------#
+# Make sure to set your working directory 
+# "To Source File Location". 
+# Also, make sure you have downloaded all required 
+# packages from required_packages.R. 
+# Now you can run the script. 
+#-------------------------------------------------------#
+
 # Libraries
 library(rhdf5)
 library(LatticeKrig)
 library(sf)
 library(fields)
+library(here)
 
-# import hacked LK files for additional kappa2 estimation
-setwd("C:/Users/anton/Desktop/Research/Italy_AQ_paper")
+# import helpful funcs
+source(here("R_scripts", "helpful_functions.R"))
 
+# seed for reproducibility 
 set.seed(7)
 
 # create grid 
@@ -18,139 +29,12 @@ gridList_small <- list(
 )
 sGrid_small <- make.surface.grid(gridList_small)
 
-# need this predict function for non-stationary, anisotropic awght
-predict.multivariateSurfaceGrid <- function(object, x) {
-  dimZ <- dim(object$z)
-  L <- dimZ[3]
-  out <- matrix(NA, nrow = nrow(x), ncol = L)
-  for (l in 1:L) {
-    out[, l] <- interp.surface(
-      list(x = object$x, y = object$y, z = object$z[,, l]), x
-    )
-  }
-  return(out)
-}
-
-# ------------------------------------
-# Function to create an LKinfo object
-# from STUN / CNN parameters
-# ------------------------------------
-
-# simply specify a file path, dataset name and
-# a day (1-365) in 2023
-# different datasets of parameters with different normalizations
-# which were processed with different replicate counts
-
-# dataset name options are: 
-# "lm_rscale_1rep_output"
-# "arx1_rscale_1rep_output"
-# "arx1_surround_1rep_output" 
-# "arx1_rscale_30rep_output"
-# "arx1_surround_30rep_output"
-
-# different datasets of parameters with different normalizations
-# which were processed with different replicate counts
-
-
-make_nonstat_LKinfo <- function(
-    file_path, 
-    dataset_name,
-    day, 
-    gridlist,
-    normalize = TRUE, 
-    NC = 128, 
-    nlevel = 1, 
-    NC.buffer = 0, 
-    sanity_plotting = FALSE, 
-    sanity_sim = FALSE
-){
-  params <- h5read(file_path, dataset_name)
-  H5close()
-  # for plotting and image purposes, need to flip upside down
-  params <- params[, 128:1, , day]
-  
-  # recover kappa
-  kappa2 <- exp(params[,,1])
-  # just in case we need awght
-  awght <- kappa2 + 4
-  # theta needs to be transformed like this 
-  theta <- params[,,2] + pi/2
-  rho   <- params[,,3]
-  
-  if (sanity_plotting){
-    par(mfrow = c(1,3))
-    imagePlot(as.surface(gridlist, kappa2),          main = "kappa2",     col = viridis(256))
-    world(add = TRUE, col = "white", lwd = 1)
-    imagePlot(as.surface(gridlist, theta - pi/2),    main = "theta(adj)", col = viridis(256))
-    world(add = TRUE, col = "white", lwd = 1)
-    imagePlot(as.surface(gridlist, rho),             main = "rho",        col = viridis(256))
-    world(add = TRUE, col = "white", lwd = 1)
-    par(mfrow = c(1,1))
-  }
-  
-  # need these for encoding into LK
-  rhox <- sqrt(rho)
-  rhoy <- 1 / rhox
-  
-  # create H tensor out of params
-  H11 <- (rhox^2 * (cos(theta))^2) + (rhoy^2 * (sin(theta))^2)
-  H12 <- (rhoy^2 - rhox^2) * (sin(theta) * cos(theta))
-  H21 <- H12 
-  H22 <- (rhox^2 * (sin(theta))^2) + (rhoy^2 * (cos(theta))^2)
-  
-  rows <- length(gridlist$x)
-  
-  # fill the high dimensional stencil (9 fields)
-  stencil_tensor <- array(NA, c(rows, rows, 9))
-  stencil_tensor[,,1] <- 0.5 * H12
-  stencil_tensor[,,2] <- -H22
-  stencil_tensor[,,3] <- -0.5 * H12
-  stencil_tensor[,,4] <- -H11
-  stencil_tensor[,,5] <- kappa2 + 2 * H11 + 2 * H22
-  stencil_tensor[,,6] <- -H11
-  stencil_tensor[,,7] <- -0.5 * H12
-  stencil_tensor[,,8] <- -H22
-  stencil_tensor[,,9] <- 0.5 * H12
-  
-  # next, we put everything into awght obj of a particular class
-  awght_obj <- list(x = gridlist$x, y = gridlist$y, z = stencil_tensor)
-  class(awght_obj) <- "multivariateSurfaceGrid"
-  
-  sGrid <- make.surface.grid(gridlist)
-  
-  LKinfo <- LKrigSetup(
-    # dont change grid
-    sGrid, 
-    # you change awght indirectly with day and file selection
-    a.wghtObject = awght_obj,
-    # the rest of these you change directly in function calls 
-    NC = NC, 
-    nlevel = nlevel,
-    normalize = normalize,
-    NC.buffer = NC.buffer
-  )
-  
-  if (sanity_sim){
-    test <- LKrig.sim(
-      sGrid,
-      LKinfo = LKinfo,
-      M = 1
-    )
-    
-    if (sanity_plotting){
-      imagePlot(as.surface(gridlist, test), col = turbo(256))
-      world(add = TRUE, col = "black", lwd = 1)
-    }
-  }
-  
-  return(LKinfo)
-}
 
 # ------------------------------------
 # Data & stationary LKinfo (outside loop)
 # ------------------------------------
-stations_df <- readRDS("Italy_AQ_AmortisedLatticeKrig/data/eea_df_2023.rds")
-cams_df     <- readRDS("Italy_AQ_AmortisedLatticeKrig/data/cams_df_2023padded.rds")
+stations_df <- readRDS(here("data", "eea_df_2023.rds"))
+cams_df     <- readRDS(here("data", "cams_df_2023padded.rds"))
 
 cams_df <- cams_df[cams_df$time >= 19358 & cams_df$time <= 19722, ]
 
@@ -178,8 +62,6 @@ results <- data.frame(
   rmse_test_ked      = NA_real_,
   rmse_test_stat     = NA_real_,
   rmse_test_ns       = NA_real_,   
-  # rmse_test_ns_s1    = NA_real_,
-  # rmse_test_ns_r1    = NA_real_,
   time_sec           = NA_real_, 
   time_coef_stat     = NA_real_,
   time_coef_ns       = NA_real_, 
@@ -194,15 +76,6 @@ predictions_df$ked_pred <- NA_real_
 predictions_df$stat_pred <- NA_real_
 predictions_df$ns_pred <- NA_real_
 
-# #new
-# predictions_df$lm_SE <- NA_real_
-# predictions_df$stat_SE <- NA_real_
-# predictions_df$ns_SE <- NA_real_
-# predictions_df$stat_upr <- NA_real_
-# predictions_df$stat_lwr <- NA_real_
-# predictions_df$ns_upr <- NA_real_
-# predictions_df$ns_lwr <- NA_real_
-
 
 # ------------------------------------
 # Main loop over days
@@ -215,7 +88,7 @@ for (i in c(1:365)) {
   
   # ----- Nonstationary LKinfo: original STUN ns -----
   LKinfo_ns <- make_nonstat_LKinfo(
-    file_path   = "Italy_AQ_AmortisedLatticeKrig/data/STUN_param_df_2023padded.h5",
+    file_path   = here("results", "STUN_param_df_2023padded.h5"),
     dataset_name= "arx1_surround_30rep_output",
     day         = chosen_day,
     gridlist    = gridList_small,
@@ -224,25 +97,6 @@ for (i in c(1:365)) {
     sanity_sim      = FALSE
   )
 
-  # LKinfo_ns_s1 <- make_nonstat_LKinfo(
-  #   file_path   = "Italy_AQ_AmortisedLatticeKrig/data/old/STUN_param_df_2023.h5",
-  #   dataset_name= "arx1_surround_1rep_output",
-  #   day         = chosen_day,
-  #   gridlist    = gridList_small,
-  #   normalize   = TRUE,
-  #   sanity_plotting = FALSE,
-  #   sanity_sim      = FALSE
-  # )
-
-  # LKinfo_ns_r1 <- make_nonstat_LKinfo(
-  #   file_path   = "Italy_AQ_AmortisedLatticeKrig/data/old/STUN_param_df_2023.h5",
-  #   dataset_name= "arx1_rscale_1rep_output",
-  #   day         = chosen_day,
-  #   gridlist    = gridList_small,
-  #   normalize   = TRUE,
-  #   sanity_plotting = FALSE,
-  #   sanity_sim      = FALSE
-  # )
   
   # subset down to our chosen day 
   stations_df_day <- stations_df[
@@ -354,8 +208,8 @@ for (i in c(1:365)) {
   time_coef_stat <- Lmodel_stat$d.coef[11,1]
   time_coef_ns   <- Lmodel_ns$d.coef[11,1]
   
-  # timing
-  elapsed <- (proc.time() - t_start)[["elapsed"]]
+  # # timing
+  # elapsed <- (proc.time() - t_start)[["elapsed"]]
   
   # store results
   results[i, ] <- list(
@@ -382,16 +236,6 @@ for (i in c(1:365)) {
   pred_stat_full    <- predict(Lmodel_stat,      s_full, Z = Z_full)
   pred_ns_full      <- predict(Lmodel_ns,        s_full, Z = Z_full)
   
-  # # standard error (NEW)
-  # SE_linear_full <- predict(linear_model, newdata = cams_df_day, se.fit = TRUE)$se.fit
-  # SE_stat_full   <- predictSE.LKrig(Lmodel_stat, s_full, Z = Z_full)
-  # SE_ns_full     <- predictSE.LKrig(Lmodel_ns,   s_full, Z = Z_full)
-  
-  # stat_upper <- pred_stat_full + 1.96 * sqrt(SE_stat_full^2 + Lmodel_stat$tau.MLE^2)
-  # stat_lower <- pred_stat_full - 1.96 * sqrt(SE_stat_full^2 + Lmodel_stat$tau.MLE^2)
-  # ns_upper <- pred_ns_full + 1.96 * sqrt(SE_ns_full^2 + Lmodel_ns$tau.MLE^2)
-  # ns_lower <- pred_ns_full - 1.96 * sqrt(SE_ns_full^2 + Lmodel_ns$tau.MLE^2)
-  
   
   # # time adjust 
   current_time <- cams_df_day$time[1]
@@ -404,23 +248,14 @@ for (i in c(1:365)) {
   predictions_df$stat_pred[day_mask] <- pred_stat_full
   predictions_df$ns_pred[day_mask]   <- pred_ns_full
   
-  # #NEW 
-  # predictions_df$lm_SE[day_mask]       <- SE_linear_full
-  # predictions_df$LK_stat_SE[day_mask]  <- SE_stat_full
-  # predictions_df$LK_ns_SE[day_mask]    <- SE_ns_full
-  # predictions_df$LK_stat_upr[day_mask] <- stat_upper
-  # predictions_df$LK_stat_lwr[day_mask] <- stat_lower
-  # predictions_df$LK_ns_upr[day_mask]   <- ns_upper
-  # predictions_df$LK_ns_lwr[day_mask]   <- ns_lower
-  
-  # # # timing
-  # elapsed <- (proc.time() - t_start)[["elapsed"]]
+
+  # timing
+  elapsed <- (proc.time() - t_start)[["elapsed"]]
   
   cat("Finished day", chosen_day, "in", round(elapsed, 2), "seconds\n")
   # print(results)
 }
 
-
 # save if you want
-saveRDS(results, "Italy_AQ_AmortisedLatticeKrig/results/rmse_CTM_reconstruct.rds")
-saveRDS(predictions_df, "Italy_AQ_AmortisedLatticeKrig/results/predictions_CTM_reconstruct.rds")
+saveRDS(results, here("results", "rmse_CTM_reconstruct.rds"))
+saveRDS(predictions_df, here("results", "predictions_CTM_reconstruct.rds"))

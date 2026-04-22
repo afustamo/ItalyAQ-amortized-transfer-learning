@@ -1,3 +1,169 @@
+# ------------------------------------
+# Function to create an LKinfo object
+# from STUN / CNN parameters
+# ------------------------------------
+
+# simply specify a file path, dataset name and
+# a day (1-365) in 2023
+# file: STUN_param_df_2023padded.h5
+# dataset: arx1_surround_30rep_output
+
+
+make_nonstat_LKinfo <- function(
+    file_path, 
+    dataset_name,
+    day, 
+    gridlist,
+    normalize = TRUE, 
+    NC = 128, 
+    nlevel = 1, 
+    NC.buffer = 0, 
+    sanity_plotting = FALSE, 
+    sanity_sim = FALSE
+){
+  params <- h5read(file_path, dataset_name)
+  H5close()
+  # for plotting and image purposes, need to flip upside down
+  params <- params[, 128:1, , day]
+  
+  # recover kappa
+  kappa2 <- exp(params[,,1])
+  # just in case we need awght
+  awght <- kappa2 + 4
+  # theta needs to be transformed like this 
+  theta <- params[,,2] + pi/2
+  rho   <- params[,,3]
+  
+  if (sanity_plotting){
+    par(mfrow = c(1,3))
+    imagePlot(as.surface(gridlist, kappa2),          main = "kappa2",     col = viridis(256))
+    world(add = TRUE, col = "white", lwd = 1)
+    imagePlot(as.surface(gridlist, theta - pi/2),    main = "theta(adj)", col = viridis(256))
+    world(add = TRUE, col = "white", lwd = 1)
+    imagePlot(as.surface(gridlist, rho),             main = "rho",        col = viridis(256))
+    world(add = TRUE, col = "white", lwd = 1)
+    par(mfrow = c(1,1))
+  }
+  
+  # need these for encoding into LK
+  rhox <- sqrt(rho)
+  rhoy <- 1 / rhox
+  
+  # create H tensor out of params
+  H11 <- (rhox^2 * (cos(theta))^2) + (rhoy^2 * (sin(theta))^2)
+  H12 <- (rhoy^2 - rhox^2) * (sin(theta) * cos(theta))
+  H21 <- H12 
+  H22 <- (rhox^2 * (sin(theta))^2) + (rhoy^2 * (cos(theta))^2)
+  
+  rows <- length(gridlist$x)
+  
+  # fill the high dimensional stencil (9 fields)
+  stencil_tensor <- array(NA, c(rows, rows, 9))
+  stencil_tensor[,,1] <- 0.5 * H12
+  stencil_tensor[,,2] <- -H22
+  stencil_tensor[,,3] <- -0.5 * H12
+  stencil_tensor[,,4] <- -H11
+  stencil_tensor[,,5] <- kappa2 + 2 * H11 + 2 * H22
+  stencil_tensor[,,6] <- -H11
+  stencil_tensor[,,7] <- -0.5 * H12
+  stencil_tensor[,,8] <- -H22
+  stencil_tensor[,,9] <- 0.5 * H12
+  
+  # next, we put everything into awght obj of a particular class
+  awght_obj <- list(x = gridlist$x, y = gridlist$y, z = stencil_tensor)
+  class(awght_obj) <- "multivariateSurfaceGrid"
+  
+  sGrid <- make.surface.grid(gridlist)
+  
+  LKinfo <- LKrigSetup(
+    # dont change grid
+    sGrid, 
+    # you change awght indirectly with day and file selection
+    a.wghtObject = awght_obj,
+    # the rest of these you change directly in function calls 
+    NC = NC, 
+    nlevel = nlevel,
+    normalize = normalize,
+    NC.buffer = NC.buffer
+  )
+  
+  if (sanity_sim){
+    test <- LKrig.sim(
+      sGrid,
+      LKinfo = LKinfo,
+      M = 1
+    )
+    
+    if (sanity_plotting){
+      imagePlot(as.surface(gridlist, test), col = turbo(256))
+      world(add = TRUE, col = "black", lwd = 1)
+    }
+  }
+  
+  return(LKinfo)
+}
+
+
+
+# need this predict function for non-stationary, anisotropic awght
+predict.multivariateSurfaceGrid <- function(object, x) {
+  dimZ <- dim(object$z)
+  L <- dimZ[3]
+  out <- matrix(NA, nrow = nrow(x), ncol = L)
+  for (l in 1:L) {
+    out[, l] <- interp.surface(
+      list(x = object$x, y = object$y, z = object$z[,, l]), x
+    )
+  }
+  return(out)
+}
+
+
+
+# ---------------------------------------
+# Function to estimate additional kappa2
+# for an already nonstationary LKinfo
+# ---------------------------------------
+
+est_additional_kappa2 <- function(
+    s, 
+    y, 
+    Z, 
+    LKinfo, 
+    kappa2_weights,
+    verbose = FALSE
+){
+  
+  kappa2_weights <- kappa2_weights
+  # assign("kappa2_weights", as.numeric(kappa2_weights), envir = .GlobalEnv)
+  
+  LKinfo_additional <- LKinfo
+  LKinfo_additional$a.wght <- NA
+  LKinfo_additional$a.wghtObject <- NULL
+  LKinfo_additional$a.wght <- list()
+  LKinfo_additional$a.wght[[1]] <- 4.01
+  attr(LKinfo_additional$a.wght, "isotropic") <- TRUE
+  
+  Lmodel_additional <- LatticeKrig_hacked(
+    s,
+    y,
+    Z,
+    LKinfo = LKinfo_additional, 
+    findAwght = T
+  )
+  
+  LKinfo_new <- LKinfo
+  # LKinfo_new$a.wght[[1]][,5] <- LKinfo_new$a.wght[[1]][,5] +
+  #   (kappa2_weights * (Lmodel_additional$LKinfo$a.wght[[1]]-4))
+  
+  LKinfo_new$a.wght[[1]][,5] <- LKinfo_new$a.wght[[1]][,5] +
+    (Lmodel_additional$LKinfo$a.wght[[1]]-4)
+  
+  return(LKinfo_new)
+}
+
+
+
 
 # now let's do the additional kappa2 modification
 LatticeKrig_hacked<- function(x, y, Z=NULL, weights=NULL,   nlevel=3, findAwght=FALSE, 

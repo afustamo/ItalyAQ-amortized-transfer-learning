@@ -1,8 +1,9 @@
 ##########             IMPORTANT              ###########
 #-------------------------------------------------------#
-# Navigate to "Session" in the top left of RStudio and
-# click on "Set Working Directory" and then 
-# choose "To Source File Location". 
+# Make sure to set your working directory 
+# "To Source File Location". 
+# Also, make sure you have downloaded all required 
+# packages from required_packages.R. 
 # Now you can run the script. 
 #-------------------------------------------------------#
 
