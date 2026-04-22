@@ -1,8 +1,6 @@
 # data should be ignored (large files)
 data/
 
-R_scripts/plotting/
-
 # resulting plots as well
 results/model_wghts/
 results/metrics/
