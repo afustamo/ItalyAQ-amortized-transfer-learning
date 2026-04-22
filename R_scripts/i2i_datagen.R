@@ -13,7 +13,7 @@ library(tictoc)
 library(rhdf5)
 library(here)
 # helper functions
-source(here("R_scripts", "helper_funcs.R"))
+source(here("R_scripts", "helpful_functions.R"))
 
 
 # Some choices to make: 

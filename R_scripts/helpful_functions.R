@@ -699,3 +699,52 @@ LKrig_hacked <- function(x, y,
   # all done!  
   return(object)
 }
+
+LKrigSARGaussian<- function(LKinfo,M,
+                            asList=FALSE ){
+  coefSAR<- NULL
+  nLevel<- LKinfo$nlevel
+  for( K in 1:nLevel){
+    B <- LKrigSAR(LKinfo,Level=K)
+    B<- spind2spam(B) # convert to spam format 
+    mLevel<- LKinfo$latticeInfo$mLevel[K]
+    # here using Gaussian but can change to other distribution 
+    U<- runif(mLevel*M )
+    E<-  qnorm(U)
+    E<- matrix(E, mLevel, M)
+    #
+    y<- as.matrix(solve(B, E)) # uses sparse methods
+    if(!asList){
+      coefSAR<- rbind(coefSAR, y)
+    }
+    else{ coefSAR<- c( coefSAR, list(y))}
+  }
+  return( coefSAR)
+}
+
+# function for defining fun coastline-like surfaces
+coastline <- function(x, coast_coef, coast_bump_scale, coast_freq) {
+  return(coast_coef * x + coast_bump_scale * sin(2 * pi * coast_freq * x) 
+         + 0.01 * rnorm(length(x)))
+}
+
+# read current dims of h5 data
+get_dims <- function() {
+  info  <- h5ls(file_name, all=TRUE)
+  row   <- subset(info, name==dataset_name & otype=="H5I_DATASET")
+  dims  <- as.integer(strsplit(row$dim, " x ")[[1]])
+  names(dims) <- c("nx","ny","nz")
+  dims
+}
+
+# predict constant values
+predict.constantValue<- function(object,x){
+  n<- length(object$values)
+  m<- nrow( x)
+  return( matrix( object$values, nrow=m, ncol=n, byrow=TRUE ) )
+}
+
+# predict functions for param grids 
+predict.surfaceGrid<- function(object,x){
+  interp.surface( object, x)
+}
