@@ -123,8 +123,14 @@ Reproducing this work requires downloading and working with many datasets and fi
 Please use the following BibTeX to cite this work: 
 
 ```{bibtex}
-{
-Add citation when available.
+@misc{moro2026nonstationaryamortizedtransferlearning,
+      title={A Non-stationary, Amortized, Transfer Learning Approach for Modeling Italian Air Quality}, 
+      author={Fusta Moro, Alessandro and Sikorski, Antony and McKenzie, Daniel and Fassò, Alessandro and Nychka, Douglas},
+      year={2026},
+      eprint={2604.18823},
+      archivePrefix={arXiv},
+      primaryClass={stat.AP},
+      url={https://arxiv.org/abs/2604.18823}, 
 }
 ```
 
