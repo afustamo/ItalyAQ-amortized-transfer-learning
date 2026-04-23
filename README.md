@@ -6,7 +6,7 @@ This repository contains the code for the article:
 
  **by**:  Alessandro Fusta Moro, Antony Sikorski, Daniel McKenzie, Alessandro Fassò, and Douglas Nychka.
  
-  You'll find tutorial notebooks, data-generation scripts, training and evaluation procedures, and all experiments on nitrogen dioxide ($\text{NO}_2$) concentration/atmospheric pollution data. The paper can currently be found on [this link]([[https://arxiv.org/](http://arxiv.org/abs/2604.18823)](http://arxiv.org/abs/2604.18823)). 
+  You'll find tutorial notebooks, data-generation scripts, training and evaluation procedures, and all experiments on nitrogen dioxide ($\text{NO}_2$) concentration/atmospheric pollution data. The paper can currently be found on [https://arxiv.org/abs/2604.18823](https://arxiv.org/abs/2604.18823). 
 
 <p align="center">
   <img src="figures/fine_grid_pred_nov1.png" alt="ItalyAQ" width="700"/>
