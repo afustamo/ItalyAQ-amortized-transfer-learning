@@ -6,7 +6,7 @@ This repository contains the code for the article:
 
  **by**:  Alessandro Fusta Moro, Antony Sikorski, Daniel McKenzie, Alessandro Fassò, and Douglas Nychka.
  
-  You'll find tutorial notebooks, data-generation scripts, training and evaluation procedures, and all experiments on nitrogen dioxide ($\text{NO}_2$) concentration/atmospheric pollution data. The paper can currently be found on [https://arxiv.org/abs/2604.18823](https://arxiv.org/abs/2604.18823). 
+  You'll find tutorial notebooks, data-generation scripts, training and evaluation procedures, and all experiments on nitrogen dioxide ($\text{NO}_2$) concentration/atmospheric pollution data. The paper can currently be found on [arXiv](https://arxiv.org/abs/2604.18823). 
 
 <p align="center">
   <img src="figures/fine_grid_pred_nov1.png" alt="ItalyAQ" width="700"/>
@@ -104,7 +104,7 @@ Reproducing this work requires downloading and working with many datasets and fi
 
 - `pred_df_2023.rds`: The covariates and other data you will need to predict ($\text{NO}_2$) concentrations on the fine grid. 
 
-- `eea_df_2023.rds`: This is the station data. It includes the ($\text{NO}_2$) concentrations and covariates. 
+- `eea_df_2023.rds`: This is the main station dataset. It includes the ($\text{NO}_2$) concentrations and covariates. The `Station_registry_information.rda` is a small, complementary file to this dataset. 
 
 - `I2I_sample_data.h5`: Data used for the automated Github testing procedure and the `tests/` that occur when you run `make test`. 
 
@@ -136,9 +136,9 @@ Please use the following BibTeX to cite this work:
 
 ## Related Links
 
-- Spatial modeling for this work is done using the well known LatticeKrig package. Attached are links to both the package on [CRAN](https://cran.r-project.org/web/packages/LatticeKrig/index.html) and the [paper](https://www.tandfonline.com/doi/full/10.1080/10618600.2014.914946). 
+- Spatial modeling for this work is done using the well known `LatticeKrig` package. Attached are links to both the package on [CRAN](https://cran.r-project.org/web/packages/LatticeKrig/index.html) and the [paper](https://www.tandfonline.com/doi/full/10.1080/10618600.2014.914946). 
 
-- This work uses data from the GRINS_AQCLIM dataset. Attached are links to both the [dataset](https://zenodo.org/records/17605148) and [paper](https://arxiv.org/abs/2602.10749). 
+- This work uses data from the `GRINS_AQCLIM` dataset. Attached are links to both the [dataset](https://zenodo.org/records/17605148) and [paper](https://arxiv.org/abs/2602.10749). 
 
-- This work expands upon the *LatticeVision* neural estimation framework. Attached are links to both the [Github repository](https://github.com/antonyxsik/LatticeVision/tree/main) and [paper](https://arxiv.org/abs/2505.09803). 
+- This work expands upon the `LatticeVision` neural estimation framework. Attached are links to both the [Github repository](https://github.com/antonyxsik/LatticeVision/tree/main) and [paper](https://arxiv.org/abs/2505.09803). 
 

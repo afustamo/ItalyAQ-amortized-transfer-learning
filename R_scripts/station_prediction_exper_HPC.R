@@ -55,7 +55,7 @@ stations_df <- subset(stations_df, AirQualityStationType == "background")
 # Begin cycle ####
 foreach(
   time_cycle = 1:total_time,
-  .packages = c("rhdf5", "LatticeKrig", "sf", "FRK", "sp", "gstat", "here"),
+  .packages = c("rhdf5", "LatticeKrig", "sf", "sp", "gstat", "here"),
   .export = c("nonstat_Q", "kappa2_weights"),
   .combine = rbind
 ) %dopar% {
