@@ -23,7 +23,7 @@ only_params <- F
 CV_scheme <- T
 total_time <- 365
 
-cams_df <- readRDS(here("data", "cams_df_2023.rds"))
+cams_df <- readRDS(here("data", "cams_df_2023padded.rds"))
 elev_map <- cams_df$DEM[cams_df$time == 19358]
 elev_map_mask <- elev_map
 elev_map_mask[elev_map_mask != 0] <- 1
